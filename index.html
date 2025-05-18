@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CS2 Skins Search</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #1e1e2f;
+      color: #f1f1f1;
+      padding: 2rem;
+    }
+    h1 {
+      text-align: center;
+      color: #ccc;
+    }
+    .controls {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    input, select {
+      padding: 0.5rem;
+      border-radius: 5px;
+      border: none;
+      outline: none;
+      font-size: 1rem;
+    }
+    input[type="number"] {
+      width: 100px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      padding: 0.8rem;
+      text-align: left;
+      border-bottom: 1px solid #444;
+    }
+    th {
+      background-color: #292946;
+      color: #ccc;
+    }
+    tr:nth-child(even) {
+      background-color: #2b2b40;
+    }
+    tr:hover {
+      background-color: #393960;
+    }
+    img {
+      width: 60px;
+    }
+    .pagination {
+      margin-top: 1rem;
+      text-align: center;
+    }
+    .pagination button {
+      margin: 0 4px;
+      padding: 0.4rem 0.8rem;
+      border-radius: 4px;
+      background-color: #444;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    .pagination button:disabled {
+      background-color: #666;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h1>CS2 Skin Viewer</h1>
+  <div class="controls">
+    <input type="text" id="searchBox" placeholder="Search name, weapon, rarity" oninput="search()" />
+    <input type="number" id="minPrice" placeholder="Min $" oninput="search()" />
+    <input type="number" id="maxPrice" placeholder="Max $" oninput="search()" />
+    <select id="sortBy" onchange="search()">
+      <option value="">Sort: Default</option>
+      <option value="price_asc">Price ↑</option>
+      <option value="price_desc">Price ↓</option>
+    </select>
+    <select id="wearFilter" onchange="search()">
+      <option value="">All Wears</option>
+      <option value="factory_new">Factory New</option>
+      <option value="minimal_wear">Minimal Wear</option>
+      <option value="field_tested">Field-Tested</option>
+      <option value="well_worn">Well-Worn</option>
+      <option value="battle_scarred">Battle-Scarred</option>
+    </select>
+
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Image</th>
+        <th>Name</th>
+        <th>Weapon</th>
+        <th>Rarity</th>
+        <th>Avg Price</th>
+        <th>Factory New</th>
+        <th>Minimal Wear</th>
+        <th>Field-Tested</th>
+        <th>Well-Worn</th>
+        <th>Battle-Scarred</th>
+      </tr>
+    </thead>
+    <tbody id="resultsTable"></tbody>
+  </table>
+  <div class="pagination" id="paginationControls"></div>
+
+  <script>
+    let allData = [];
+    let currentPage = 1;
+    const rowsPerPage = 10;
+
+    async function search() {
+      const q = document.getElementById("searchBox").value;
+      const min = parseFloat(document.getElementById("minPrice").value) || 0;
+      const max = parseFloat(document.getElementById("maxPrice").value) || Infinity;
+      const sort = document.getElementById("sortBy").value;
+      const wearFilter = document.getElementById("wearFilter").value;
+
+
+      const res = await fetch(`/api/skins?q=${encodeURIComponent(q)}`);
+      let data = await res.json();
+
+      data = data.filter(row => {
+        const price = parseFloat(row.average_price);
+        return !isNaN(price) && price >= min && price <= max;
+        if (wearFilter && !row[wearFilter]) return false;
+      });
+      
+
+      if (sort === "price_asc") {
+        data.sort((a, b) => a.average_price - b.average_price);
+      } else if (sort === "price_desc") {
+        data.sort((a, b) => b.average_price - a.average_price);
+      }
+
+      allData = data;
+      currentPage = 1;
+      displayPage();
+    }
+
+    function displayPage() {
+      const start = (currentPage - 1) * rowsPerPage;
+      const end = start + rowsPerPage;
+      const pageData = allData.slice(start, end);
+
+      const table = document.getElementById("resultsTable");
+      table.innerHTML = "";
+      pageData.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><img src="https://via.placeholder.com/60x40?text=Skin" alt="Skin" /></td>
+          <td>${row.name}</td>
+          <td>${row.weapon}</td>
+          <td>${row.rarity}</td>
+          <td>$${parseFloat(row.average_price).toFixed(2)}</td>
+          <td>$${row.factory_new ? row.factory_new.toFixed(2) : "N/A"}</td>
+          <td>$${row.minimal_wear ? row.minimal_wear.toFixed(2) : "N/A"}</td>
+          <td>$${row.field_tested ? row.field_tested.toFixed(2) : "N/A"}</td>
+          <td>$${row.well_worn ? row.well_worn.toFixed(2) : "N/A"}</td>
+          <td>$${row.battle_scarred ? row.battle_scarred.toFixed(2) : "N/A"}</td>
+
+        `;
+        table.appendChild(tr);
+      });
+
+      const pagination = document.getElementById("paginationControls");
+      pagination.innerHTML = "";
+      const totalPages = Math.ceil(allData.length / rowsPerPage);
+      for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement("button");
+        btn.textContent = i;
+        if (i === currentPage) btn.disabled = true;
+        btn.onclick = () => {
+          currentPage = i;
+          displayPage();
+        };
+        pagination.appendChild(btn);
+      }
+    }
+
+    search();
+  </script>
+</body>
+</html>
